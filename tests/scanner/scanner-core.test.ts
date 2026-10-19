@@ -5,6 +5,8 @@ import {
   analyzeSources,
   findingFingerprint,
   runLocalhostRule,
+  runLockfileRule,
+  runNodeVersionRule,
   runViteEnvRule,
   scanProject,
   walkProject,
@@ -65,7 +67,7 @@ describe('scanner core', () => {
   it('uses AST nodes, not comments or arbitrary text, for source rules', async () => {
     const walk = await walkProject(resolve(fixtures, 'clean-vite-react'));
     const app = walk.files.get('src/App.tsx')!;
-    app.text += '\n// http://localhost:3000 and import.meta.env.VITE_COMMENT\n';
+    app.text += '\n// http://localhost:3000 and import.meta.env.VITE_COMMENT\nconst prose = "The localhost URL check is documented here.";\n';
     const analysis = analyzeSources(walk);
     expect(analysis.loopbackUrls).toHaveLength(0);
     expect(analysis.envNames.map((entry) => entry.name)).toEqual(['VITE_API_URL']);
@@ -77,6 +79,29 @@ describe('scanner core', () => {
     const evidence = { kind: 'loopback-url', host: 'localhost', port: 3000 };
     expect(findingFingerprint('source.localhost-url', { path: 'src/App.tsx', line: 2 }, evidence))
       .toBe(findingFingerprint('source.localhost-url', { path: 'src/App.tsx', line: 2 }, evidence));
+    expect(findingFingerprint('source.localhost-url', { path: 'src/App.tsx', line: 2 }, evidence))
+      .toBe(findingFingerprint('source.localhost-url', { path: 'src/App.tsx', line: 99 }, evidence));
+  });
+
+  it('reports conflicting lockfiles and package-manager mismatches', async () => {
+    const walk = await walkProject(resolve(fixtures, 'clean-vite-react'));
+    walk.files.set('yarn.lock', { absolutePath: 'yarn.lock', path: 'yarn.lock', bytes: 1, text: '' });
+    const packageData = { packageManager: 'pnpm@9.0.0' };
+    const result = runLockfileRule(walk, packageData);
+    expect(result.status).toBe('finding');
+    expect(result.findings.some((item) => item.evidence.kind === 'conflicting-lockfiles')).toBe(true);
+
+    const singleLockfileWalk = await walkProject(resolve(fixtures, 'clean-vite-react'));
+    const mismatch = runLockfileRule(singleLockfileWalk, packageData);
+    expect(mismatch.findings.some((item) => item.evidence.kind === 'package-manager-mismatch')).toBe(true);
+  });
+
+  it('compares a Docker Node base image with project declarations', async () => {
+    const walk = await walkProject(resolve(fixtures, 'clean-vite-react'));
+    walk.files.set('Dockerfile', { absolutePath: 'Dockerfile', path: 'Dockerfile', bytes: 20, text: 'FROM node:18-slim\n' });
+    const result = runNodeVersionRule(walk, { engines: { node: '>=22 <25' } });
+    expect(result.status).toBe('finding');
+    expect(result.findings[0]?.evidence.kind).toBe('incompatible-node-ranges');
   });
 
   it('reports bounded files as skipped coverage instead of reading past limits', async () => {

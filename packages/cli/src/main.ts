@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -159,23 +159,31 @@ function parseCommand(argv: string[]): ParsedCommand {
 }
 
 function looksLikeAbsolutePath(value: string): boolean {
-  return isAbsolute(value) || /^[A-Za-z]:[\\/]/.test(value) || /^\\\\/.test(value);
+  return isAbsolute(value)
+    || /^[A-Za-z]:[\\/]/.test(value)
+    || /^\\\\/.test(value)
+    || /^file:\/\//i.test(value)
+    || /^\/(?:Users|home|private|tmp|var|Volumes|workspace)\//.test(value);
+}
+
+function isPathField(key: string | undefined): boolean {
+  return key !== undefined && (key === 'path' || key === 'absolutePath' || key === 'rootDir' || key === 'cwd' || key.endsWith('Path'));
 }
 
 /** Return absolute path-valued strings that would make a report machine-local. */
-export function findAbsolutePaths(value: unknown, pathStack: string[] = []): string[] {
+export function findAbsolutePaths(value: unknown, pathStack: string[] = [], key?: string): string[] {
   const found: string[] = [];
   if (typeof value === 'string') {
-    if (looksLikeAbsolutePath(value)) found.push(`${pathStack.join('.') || '(root)'}: ${value}`);
+    if (isPathField(key) && looksLikeAbsolutePath(value)) found.push(`${pathStack.join('.') || '(root)'}: ${value}`);
     return found;
   }
   if (Array.isArray(value)) {
-    value.forEach((item, index) => found.push(...findAbsolutePaths(item, [...pathStack, String(index)])));
+    value.forEach((item, index) => found.push(...findAbsolutePaths(item, [...pathStack, String(index)], key)));
     return found;
   }
   if (value && typeof value === 'object') {
     for (const [key, item] of Object.entries(value)) {
-      found.push(...findAbsolutePaths(item, [...pathStack, key]));
+      found.push(...findAbsolutePaths(item, [...pathStack, key], key));
     }
   }
   return found;
@@ -194,12 +202,12 @@ function makePortableString(value: string, root: string): string {
 }
 
 /** Deep-copy a scanner result while making all absolute path values relative. */
-export function makeReportPortable<T>(value: T, root: string): T {
-  if (typeof value === 'string') return makePortableString(value, root) as T;
-  if (Array.isArray(value)) return value.map((item) => makeReportPortable(item, root)) as T;
+export function makeReportPortable<T>(value: T, root: string, key?: string): T {
+  if (typeof value === 'string') return (isPathField(key) ? makePortableString(value, root) : value) as T;
+  if (Array.isArray(value)) return value.map((item) => makeReportPortable(item, root, key)) as T;
   if (value && typeof value === 'object') {
     const copy: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(value)) copy[key] = makeReportPortable(item, root);
+    for (const [entryKey, item] of Object.entries(value)) copy[entryKey] = makeReportPortable(item, root, entryKey);
     return copy as T;
   }
   return value;
@@ -349,6 +357,16 @@ async function runScan(parsed: ParsedCommand, io: CliIO): Promise<number> {
   }
   const cwd = io.cwd ?? process.cwd();
   const projectRoot = resolve(cwd, parsed.positionals[0] ?? '.');
+  try {
+    const projectStats = await stat(projectRoot);
+    if (!projectStats.isDirectory()) {
+      errorOutput(io, `scan path is not a directory: ${projectRoot}\n`);
+      return EXIT_CODES.invalidInput;
+    }
+  } catch (error) {
+    errorOutput(io, `cannot access scan path: ${error instanceof Error ? error.message : String(error)}\n`);
+    return EXIT_CODES.invalidInput;
+  }
   let rawReport: unknown;
   try {
     rawReport = await scanProject(projectRoot, parsed.options.limits);

@@ -205,6 +205,24 @@ function addNodeDeclaration(declarations: NodeDeclaration[], source: string, val
   else declarations.push({ source, value: trimmed, range: '' });
 }
 
+function addDockerNodeDeclarations(declarations: NodeDeclaration[], walk: WalkResult): void {
+  const dockerfile = walk.files.get('Dockerfile')?.text;
+  if (dockerfile === undefined) return;
+  for (const line of dockerfile.split(/\r?\n/)) {
+    const match = line.match(/^\s*FROM\s+node:([^\s]+)(?:\s|$)/i);
+    if (!match) continue;
+    const tag = match[1];
+    // Common Docker tags such as node:22-slim identify a major line even
+    // though the suffix itself is not semver syntax.
+    const normalized = tag.match(/^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+].*)?$/);
+    addNodeDeclaration(
+      declarations,
+      'Dockerfile#FROM node',
+      normalized ? (normalized[2] ? tag.replace(/-.*/, '') : `${normalized[1]}.x`) : tag,
+    );
+  }
+}
+
 function collectNodeDeclarations(walk: WalkResult, packageData?: PackageData): NodeDeclaration[] {
   const declarations: NodeDeclaration[] = [];
   addNodeDeclaration(declarations, 'package.json#/engines/node', packageData?.engines?.node);
@@ -218,11 +236,12 @@ function collectNodeDeclarations(walk: WalkResult, packageData?: PackageData): N
     const line = toolVersions.split(/\r?\n/).find((value) => /^\s*node(?:js)?\s+\S+/.test(value));
     if (line) addNodeDeclaration(declarations, '.tool-versions', line.trim().split(/\s+/, 2)[1]);
   }
+  addDockerNodeDeclarations(declarations, walk);
   return declarations;
 }
 
 export function runNodeVersionRule(walk: WalkResult, packageData?: PackageData): CheckResult {
-  const declarationPaths = new Set(['.nvmrc', '.node-version', '.tool-versions', 'package.json']);
+  const declarationPaths = new Set(['.nvmrc', '.node-version', '.tool-versions', 'package.json', 'Dockerfile']);
   const skippedDeclarations = walk.skippedFiles.filter((file) => declarationPaths.has(file.path));
   if (skippedDeclarations.length) {
     return check('runtime.node-version', 'not_checked', [], {
@@ -236,7 +255,7 @@ export function runNodeVersionRule(walk: WalkResult, packageData?: PackageData):
     const finding = makeFinding({
       ruleId: 'runtime.node-version',
       message: 'No supported Node version declaration was found.',
-      evidence: { kind: 'missing-node-declaration', supported: ['package.json#/engines/node', '.nvmrc', '.node-version', '.tool-versions'] },
+       evidence: { kind: 'missing-node-declaration', supported: ['package.json#/engines/node', '.nvmrc', '.node-version', '.tool-versions', 'Dockerfile#FROM node'] },
       explanation: 'Declaring the Node runtime prevents a deployment from silently selecting an incompatible version.',
       nextSteps: ['Declare a compatible Node range in package.json engines.node or commit a Node version file.'],
     });

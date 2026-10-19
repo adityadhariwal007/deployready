@@ -11,6 +11,11 @@ const SKIPPED_DIRECTORIES = new Set([
   'coverage',
   '.next',
   '.cache',
+  '.vite',
+  'fixtures',
+  'tests',
+  '__tests__',
+  'e2e',
 ]);
 
 function isTemplateEnvironmentPath(path: string): boolean {

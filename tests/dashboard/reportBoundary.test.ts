@@ -18,4 +18,20 @@ describe('dashboard report input boundary', () => {
     expect(parseReportText('{not-json')).toMatchObject({ status: 'malformed' });
     expect(parseReportText(JSON.stringify({ reportType: 'other-tool' }))).toMatchObject({ status: 'unsupported' });
   });
+
+  it('rejects reports that would reveal absolute local paths', () => {
+    const unsafe = structuredClone(SAMPLE_REPORT);
+    unsafe.checks[0].findings = [{
+      fingerprint: 'unsafe-path',
+      ruleId: 'package.build-script',
+      severity: 'error',
+      title: 'Unsafe path',
+      message: 'Unsafe path',
+      location: { path: '/Users/example/project/package.json' },
+      evidence: { kind: 'test' },
+      explanation: 'test',
+      nextSteps: ['test'],
+    }];
+    expect(parseReportText(JSON.stringify(unsafe))).toMatchObject({ status: 'unsupported' });
+  });
 });

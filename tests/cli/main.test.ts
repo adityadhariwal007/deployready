@@ -27,6 +27,13 @@ function capture() {
 }
 
 describe('CLI input validation', () => {
+  it('returns code 2 for a missing scan path', async () => {
+    const captureOutput = capture();
+    const code = await runCli(['scan', 'does-not-exist'], { ...captureOutput.io, cwd: process.cwd() });
+    expect(code).toBe(EXIT_CODES.invalidInput);
+    expect(captureOutput.stderr).toContain('cannot access scan path');
+  });
+
   it('returns code 2 for malformed report input', async () => {
     const captureOutput = capture();
     const code = await runCli(['validate-report', '-', '--format', 'json'], { ...captureOutput.io, stdin: '{' });
@@ -36,6 +43,7 @@ describe('CLI input validation', () => {
 
   it('detects absolute paths before publishing reports', () => {
     expect(findAbsolutePaths({ location: { path: '/Users/example/project/package.json' } })).toHaveLength(1);
+    expect(findAbsolutePaths({ location: { path: 'package.json', jsonPointer: '/scripts/build' } })).toHaveLength(0);
   });
 
   it('validates a frozen report contract', async () => {

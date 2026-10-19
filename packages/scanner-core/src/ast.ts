@@ -77,17 +77,13 @@ function parseSource(text: string): NodeLike {
 }
 
 function loopback(value: string): { protocol: string; host: string; port?: number } | undefined {
-  const explicit = value.match(/((?:https?|wss?|ws|ftp):\/\/)(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|::1)(?::(\d{1,5}))?(?=\/|[?#\s]|$)/i);
-  const bare = explicit ? undefined : value.match(/(?:^|[^\w])(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|::1)(?::(\d{1,5}))?(?=\/|[?#\s]|$)/i);
-  const match = explicit ?? bare;
-  if (!match) return undefined;
-  const host = explicit ? match[2] : match[1];
-  const port = explicit ? match[3] : match[2];
+  const explicit = value.match(/((?:https?):\/\/)(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|::1)(?::(\d{1,5}))?(?=\/|[?#\s]|$)/i);
+  if (!explicit) return undefined;
+  const host = explicit[2];
+  const port = explicit[3];
   if (!host) return undefined;
-  // A bare hostname is only a URL for this rule when it has a port or a path.
-  if (!explicit && !port && !/\/|[?#]/.test(value.slice(match.index ?? 0))) return undefined;
   const result: { protocol: string; host: string; port?: number } = {
-    protocol: explicit ? match[1].replace('://', '').toLowerCase() : 'bare',
+    protocol: explicit[1].replace('://', '').toLowerCase(),
     host: host.toLowerCase(),
   };
   if (port) result.port = Number(port);
