@@ -8,6 +8,8 @@ COPY package.json package-lock.json ./
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY packages/cli/package.json packages/cli/package.json
 COPY packages/comparison/package.json packages/comparison/package.json
+COPY packages/fix-prompt/package.json packages/fix-prompt/package.json
+COPY packages/lighthouse-adapter/package.json packages/lighthouse-adapter/package.json
 COPY packages/report-contract/package.json packages/report-contract/package.json
 COPY packages/scanner-core/package.json packages/scanner-core/package.json
 
