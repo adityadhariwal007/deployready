@@ -110,6 +110,7 @@ describe('DeployReady dashboard', () => {
     await user.upload(screen.getByLabelText('Import Lighthouse JSON'), new File([fixture], 'synthetic-lighthouse.json', { type: 'application/json' }));
     expect(await screen.findByRole('heading', { name: 'Lighthouse audit' })).toBeInTheDocument();
     expect(screen.getByText('Imported locally, not run here.')).toBeInTheDocument();
+    expect(screen.getByText('Synthetic fixture warning: no browser was launched.')).toBeInTheDocument();
     expect(screen.queryByText('Structured data is valid')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /All audits/ }));
     expect(screen.getByText('Structured data is valid')).toBeInTheDocument();
