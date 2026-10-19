@@ -109,9 +109,9 @@ The static bundle is written to `apps/dashboard/dist/`.
 
 ### Local browser verification
 
-The production bundle was also audited locally in Chrome DevTools using Lighthouse `13.5.0` with mobile emulation against `http://127.0.0.1:4173/` on `2026-10-19T18:35:41.744Z` (the report's UTC `fetchTime`). The recorded category scores were Performance `89`, Accessibility `97`, Best Practices `100`, and SEO `100`. This was a real audit of the local production bundle, separate from the clearly labelled synthetic Lighthouse fixture and not a hosted deployment result.
+The production bundle was also audited locally in Chrome DevTools using Lighthouse `13.5.0` with mobile emulation against `http://127.0.0.1:4173/` on `2026-10-19T18:35:41.744Z` (the report's UTC `fetchTime`). The initial recorded category scores were Performance `89`, Accessibility `97`, Best Practices `100`, and SEO `100`. After the contrast fix, a second real mobile audit recorded Performance `88`, Accessibility `100`, Best Practices `100`, and SEO `100`. These were real audits of the local production bundle, separate from the clearly labelled synthetic Lighthouse fixture and not hosted deployment results.
 
-That audit warned that installed Chrome extensions affected load performance. DeployReady therefore does not treat the contaminated JavaScript-size or performance observations as optimization evidence. Its actionable accessibility finding was insufficient contrast on secondary metadata and table/footer text; the affected neutral text token has been darkened while preserving the cream/navy/teal visual system. Re-run Lighthouse in a clean or incognito profile to establish a post-change score. The large raw JSON export remains outside this repository.
+Both audits warned that installed Chrome extensions affected load performance. DeployReady therefore does not treat the contaminated JavaScript-size or performance observations as optimization evidence or claim a clean benchmark. The actionable accessibility finding was insufficient contrast on secondary metadata and table/footer text; the affected neutral text token was darkened while preserving the cream/navy/teal visual system. The real Lighthouse export was imported and rendered in the dashboard; its Lighthouse evidence remained excluded from remediation until the explicit same-project association gate was confirmed. The large raw JSON export remains outside this repository.
 
 ## Scan-to-compare demo
 
@@ -154,7 +154,20 @@ docker build -t deployready .
 docker run --rm --network none deployready npm test
 ```
 
-The second command is deliberately network-disabled. It should be run after the image has been built and dependencies are available in the image.
+The second command is deliberately network-disabled. GitHub Actions run `39304457396` (commit `816e37c`) completed clean `npm ci`, all 42 tests, typecheck, production build, Docker image build, and Docker tests with `--network none`. Docker is therefore verified in CI; local Docker availability is not required to use the scanner or dashboard.
+
+## Release verification and demo path
+
+The reproducible release path is:
+
+1. Run `npm ci` on Node `22.19.0` (the pinned `.nvmrc` runtime).
+2. Run `npm test -- --run`, `npm run typecheck`, and `npm run build`.
+3. Run `npm run dev`, open the local Vite URL, and review the labelled synthetic report.
+4. Use **Import JSON report** with a CLI report, then expand a finding and select **Include in fix prompt** or **Create fix prompt**.
+5. Edit the deterministic Markdown preview, then use **Copy prompt** or **Download Markdown**.
+6. Use **Import Lighthouse JSON** with a local export. Confirm the explicit same-project association only when appropriate; select failed actionable audits only after association.
+
+These checks demonstrate reproducible local tooling and report-review behavior. They do not certify a deployment, prove runtime correctness, or imply a hosted Lighthouse score. The dashboard never applies fixes, launches Chrome, fetches arbitrary URLs, or creates a combined readiness score.
 
 ## Architecture
 
@@ -179,7 +192,7 @@ DeployReady initially supports root-level Vite/React projects and direct static 
 - Apply automatic source fixes.
 - Inspect a full monorepo dependency graph.
 - Launch Chrome or run a Lighthouse audit; Lighthouse JSON is imported as local evidence only, and no real Lighthouse audit is bundled with this repository.
-- Verify Docker execution on machines without Docker or Podman; the Docker commands above remain environment-dependent.
-- The current `npm audit` report contains three development-tool findings (one moderate and two critical) in Vitest's transitive test runner dependencies. npm's available remediation is a major Vitest upgrade (`5.0.5`), so it was not applied as an unverified broad upgrade; production dependencies are unaffected by those findings. Reassess the toolchain upgrade separately.
+- Run Docker locally when Docker or Podman is unavailable; the CI Docker verification above remains the authoritative container check for this repository.
+- The targeted Vitest `5.0.5` upgrade addresses the previously reported development-tool advisories. Current `npm audit` and `npm audit --omit=dev` both report zero vulnerabilities. Reassess future toolchain advisories when dependencies change.
 
 Use the report as a preflight aid, then run the real project build and the deployment platform’s own validation.
