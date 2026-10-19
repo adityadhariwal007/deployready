@@ -1,0 +1,46 @@
+{
+  "name": "deployready",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline, evidence-backed deployment configuration inspection for Vite and React projects.",
+  "workspaces": [
+    "apps/dashboard",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "vite --config apps/dashboard/vite.config.ts",
+    "build": "npm run build:dashboard && npm run typecheck",
+    "build:dashboard": "vite build --config apps/dashboard/vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deployready": "tsx packages/cli/src/main.ts",
+    "scan:sample": "tsx packages/cli/src/main.ts scan fixtures/projects/broken-vite-react --output reports/sample-report.json --format json"
+  },
+  "engines": {
+    "node": ">=22.19.0 <25"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.28.4",
+    "ajv": "^8.17.1",
+    "commander": "^14.0.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "semver": "^7.7.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^5.0.2",
+    "jsdom": "^26.1.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.4"
+  }
+}
