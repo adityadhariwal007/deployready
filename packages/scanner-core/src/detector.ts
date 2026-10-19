@@ -24,16 +24,18 @@ function scriptValues(packageData: PackageData): string[] {
 
 function packageIdentity(rootDir: string, packageData?: PackageData): { label: string; identity: string } {
   const packageName = packageData?.name?.trim();
+  const directoryLabel = basename(rootDir) || 'project';
   if (packageName) {
     return {
-      label: packageName,
+      // The directory label describes the scanned artifact; the package name
+      // supplies the stable identity used to compare successive scans.
+      label: directoryLabel,
       // Version changes are common during a manual fix. Keep project identity
       // stable across scans while still separating named projects.
       identity: `npm:${packageName}`,
     };
   }
-  const label = basename(rootDir) || 'project';
-  return { label, identity: `directory:${label}` };
+  return { label: directoryLabel, identity: `directory:${directoryLabel}` };
 }
 
 export async function detectProject(rootDir: string, walk?: WalkResult): Promise<ProjectDetection> {

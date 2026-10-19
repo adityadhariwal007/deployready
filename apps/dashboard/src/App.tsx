@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent } from 'react';
 import type { CheckResult, CheckStatus, Finding, ScanReport, Severity } from '../../../packages/report-contract/src';
 import { compareReports, type ComparisonResult } from './comparisonBoundary';
 import { parseReportText, readReportFile, type ReportInputResult } from './reportBoundary';
@@ -92,7 +92,7 @@ function ImportPanel({ onImport, onSample, onClear }: { onImport: () => void; on
 
 function SummaryCard({ label, value, detail, tone = 'default' }: { label: string; value: string | number; detail: string; tone?: string }) {
   return (
-    <article className={`summary-card tone-${tone}`}>
+    <article className={`summary-card tone-${tone}`} aria-label={`${label}: ${value}. ${detail}`}>
       <p className="summary-label">{label}</p>
       <p className="summary-value">{value}</p>
       <p className="summary-detail">{detail}</p>
@@ -102,7 +102,10 @@ function SummaryCard({ label, value, detail, tone = 'default' }: { label: string
 
 function CoverageCard({ report }: { report: ScanReport }) {
   const { coverage } = report;
-  const evaluated = Math.min(coverage.checksEvaluated, coverage.checksTotal);
+  const totalChecks = report.checks.length;
+  const evaluated = report.checks.filter((check) => check.status !== 'not_checked').length;
+  const notChecked = report.checks.filter((check) => check.status === 'not_checked').length;
+  const notApplicable = report.checks.filter((check) => check.status === 'not_applicable').length;
   return (
     <article className="panel coverage-card" aria-labelledby="coverage-heading">
       <div className="panel-heading">
@@ -112,11 +115,12 @@ function CoverageCard({ report }: { report: ScanReport }) {
         </div>
         <span className="icon-badge" aria-hidden="true">◌</span>
       </div>
-      <div className="coverage-count"><strong>{evaluated}</strong><span>of {coverage.checksTotal} checks evaluated</span></div>
-      <progress aria-label={`${evaluated} of ${coverage.checksTotal} checks evaluated`} value={evaluated} max={Math.max(coverage.checksTotal, 1)} />
+      <div className="coverage-count"><strong>{evaluated}</strong><span>of {totalChecks} checks evaluated</span></div>
+      <progress aria-label={`${evaluated} of ${totalChecks} checks evaluated`} value={evaluated} max={Math.max(totalChecks, 1)} />
       <dl className="compact-list">
         <div><dt>Files considered</dt><dd>{coverage.filesConsidered}</dd></div>
-        <div><dt>Not checked</dt><dd>{coverage.checksNotChecked}</dd></div>
+        <div><dt>Not checked</dt><dd>{notChecked}</dd></div>
+        <div><dt>Not applicable</dt><dd>{notApplicable}</dd></div>
         <div><dt>Per-file limit</dt><dd>{formatBytes(coverage.limits.maxFileBytes)}</dd></div>
         <div><dt>Total byte limit</dt><dd>{formatBytes(coverage.limits.maxTotalBytes)}</dd></div>
       </dl>
@@ -305,10 +309,11 @@ export function App() {
           {afterReport.project.kind === 'unsupported' && <div className="partial-banner unsupported-project" role="status"><span className="partial-icon" aria-hidden="true">!</span><div><strong>Unsupported project kind</strong><span>The report is structurally valid, but DeployReady does not have project-specific checks for this project type.</span></div></div>}
           <PartialBanner report={afterReport} />
           <section className="summary-grid" aria-label="Report summary">
-            <SummaryCard label="Findings" value={afterReport.summary.findingCount} detail="Recorded in this report" tone={afterReport.summary.findingCount > 0 ? 'caution' : 'positive'} />
+            <SummaryCard label="Findings" value={afterReport.summary.findingCount} detail="Finding instances recorded" tone={afterReport.summary.findingCount > 0 ? 'caution' : 'positive'} />
+            <SummaryCard label="Affected checks" value={afterReport.checks.filter((check) => check.status === 'finding').length} detail={`${afterReport.checks.filter((check) => check.status === 'finding').length} of ${afterReport.checks.length} checks have findings`} tone={afterReport.checks.some((check) => check.status === 'finding') ? 'caution' : 'positive'} />
             <SummaryCard label="Errors" value={afterReport.summary.bySeverity.error} detail="Highest severity findings" tone={afterReport.summary.bySeverity.error > 0 ? 'danger' : 'positive'} />
             <SummaryCard label="Warnings" value={afterReport.summary.bySeverity.warning} detail="Review before handoff" tone="caution" />
-            <SummaryCard label="Checks" value={afterReport.summary.byStatus.passed} detail={`${afterReport.summary.byStatus.finding} with findings · ${afterReport.summary.byStatus.not_checked} not checked`} />
+            <SummaryCard label="Checks" value={afterReport.checks.length} detail={`${afterReport.checks.filter((check) => check.status !== 'not_checked').length} evaluated · ${afterReport.checks.filter((check) => check.status === 'not_checked').length} not checked`} />
           </section>
           <div className="dashboard-grid"><ChecksPanel report={afterReport} /><CoverageCard report={afterReport} /></div>
           {afterReport.limitations.length > 0 && <section className="limitations-panel panel" aria-labelledby="limitations-heading"><div className="panel-heading"><div><p className="eyebrow">Read the edges</p><h2 id="limitations-heading">Scan limitations</h2></div></div><ul>{afterReport.limitations.map((limitation) => <li key={`${limitation.reason}-${limitation.path}`}><strong>{limitation.reason}</strong>{limitation.path && <code>{limitation.path}</code>}{limitation.detail && <span>{limitation.detail}</span>}</li>)}</ul></section>}
@@ -318,8 +323,4 @@ export function App() {
       <AppFooter />
     </div>
   );
-}
-
-export function renderValue(value: unknown): ReactNode {
-  return typeof value === 'string' || typeof value === 'number' ? value : JSON.stringify(value);
 }

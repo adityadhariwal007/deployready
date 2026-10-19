@@ -48,7 +48,7 @@ const sampleReport: ScanReport = {
     { ruleId: 'package.lockfiles', title: 'Dependency lockfile', status: 'finding', severity: 'warning', findings: [lockfileFinding], evaluatedInputs: ['package.json'] },
     { ruleId: 'runtime.node-version', title: 'Node version declaration', status: 'passed', severity: 'warning', findings: [], evaluatedInputs: ['.nvmrc', 'package.json'], evidence: { kind: 'version-file', path: '.nvmrc', value: '22.19.0' } },
     { ruleId: 'source.vite-env', title: 'Vite environment template', status: 'finding', severity: 'warning', findings: [envTemplateFinding], evaluatedInputs: ['src/config.ts', '.env.example'] },
-    { ruleId: 'source.localhost-url', title: 'Localhost URL', status: 'not_checked', severity: 'warning', findings: [], evaluatedInputs: [], limitations: [{ reason: 'No source files were supplied for this check.', path: 'src/' }] },
+    { ruleId: 'source.localhost-url', title: 'Localhost URL', status: 'not_checked', severity: 'warning', findings: [], evaluatedInputs: [], limitations: [{ reason: 'No source files were supplied for this synthetic sample.', path: 'src/' }] },
     { ruleId: 'git.tracked-env', title: 'Tracked environment file', status: 'passed', severity: 'error', findings: [], evaluatedInputs: ['.gitignore'], evidence: { kind: 'gitignore', path: '.env' } },
   ],
   coverage: {
@@ -59,7 +59,7 @@ const sampleReport: ScanReport = {
     skippedFiles: [],
     limits: { maxFileBytes: 500000, maxFiles: 1000, maxTotalBytes: 5000000 },
   },
-  limitations: [{ reason: 'The localhost URL check was not evaluated because source/ was not available in this sample.', path: 'src/' }],
+  limitations: [{ reason: 'The Localhost URL check was not evaluated because this synthetic sample has no source files under src/.', path: 'src/' }],
 };
 
 const baselineBuildFinding: Finding = {

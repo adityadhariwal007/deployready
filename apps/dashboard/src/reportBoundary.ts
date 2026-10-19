@@ -62,7 +62,13 @@ export async function readReportFile(file: File): Promise<ReportInputResult> {
     };
   }
   try {
-    return parseReportText(await file.text());
+    const text = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(reader.error ?? new Error('file read failed'));
+      reader.readAsText(file);
+    });
+    return parseReportText(text);
   } catch {
     return {
       status: 'malformed',

@@ -18,6 +18,18 @@ describe('DeployReady dashboard', () => {
     expect(screen.queryByText(/readiness percentage/i)).not.toBeInTheDocument();
   });
 
+  it('keeps total, evaluated, affected, and finding counts distinct and consistent', () => {
+    render(<App />);
+
+    expect(screen.getByRole('article', { name: 'Findings: 2. Finding instances recorded' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Affected checks: 2. 2 of 6 checks have findings' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Checks: 6. 5 evaluated · 1 not checked' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.check-card')).toHaveLength(6);
+    expect(document.querySelector('.coverage-count')?.textContent).toBe('5of 6 checks evaluated');
+    expect(screen.getByText('The Localhost URL check was not evaluated because this synthetic sample has no source files under src/.')).toBeInTheDocument();
+    expect(screen.queryByText(/source\/ was not available/i)).not.toBeInTheDocument();
+  });
+
   it('reveals safe evidence, explanation, and next steps from keyboard-accessible details', async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -27,6 +39,17 @@ describe('DeployReady dashboard', () => {
     expect(screen.getAllByText('Next steps').length).toBeGreaterThan(0);
     await user.click(screen.getAllByText('View safe evidence')[0]);
     expect(screen.getByText(/no lockfile in project root/)).toBeInTheDocument();
+  });
+
+  it('keeps primary controls reachable by keyboard', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.tab();
+    expect(document.activeElement).toHaveAttribute('aria-label', 'DeployReady home');
+    await user.tab();
+    expect(document.activeElement?.tagName).toBe('BUTTON');
+    expect(document.activeElement).toHaveTextContent('Import JSON report');
   });
 
   it('filters checks and supports a malformed import without replacing the current report', async () => {
