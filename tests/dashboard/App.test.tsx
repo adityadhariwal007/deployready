@@ -61,6 +61,7 @@ describe('DeployReady dashboard', () => {
     const search = screen.getAllByPlaceholderText('Search checks or evidence')[0];
     await user.type(search, 'lockfile');
     expect(screen.getAllByText('Dependency lockfile').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Reset filters/ })).toBeInTheDocument();
     const visibleCheckCards = Array.from(document.querySelectorAll('.check-card'));
     expect(visibleCheckCards).toHaveLength(1);
     expect(visibleCheckCards[0]?.textContent).toContain('Dependency lockfile');
@@ -97,6 +98,8 @@ describe('DeployReady dashboard', () => {
     await user.click(screen.getByRole('button', { name: 'Copy prompt' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(preview.value));
     expect(screen.getByText('Copied the current prompt text.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Remove No dependency lockfile found from fix prompt' }));
+    expect(screen.getByText('Nothing selected yet.')).toBeInTheDocument();
   });
 
   it('imports the Lighthouse fixture and requires explicit project association', async () => {
@@ -107,6 +110,9 @@ describe('DeployReady dashboard', () => {
     await user.upload(screen.getByLabelText('Import Lighthouse JSON'), new File([fixture], 'synthetic-lighthouse.json', { type: 'application/json' }));
     expect(await screen.findByRole('heading', { name: 'Lighthouse audit' })).toBeInTheDocument();
     expect(screen.getByText('Imported locally, not run here.')).toBeInTheDocument();
+    expect(screen.queryByText('Structured data is valid')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /All audits/ }));
+    expect(screen.getByText('Structured data is valid')).toBeInTheDocument();
     const audit = screen.getByLabelText('Select Lighthouse audit Buttons have an accessible name') as HTMLInputElement;
     expect(audit).toBeDisabled();
     await user.click(screen.getByLabelText('Associate this export with the current project'));
