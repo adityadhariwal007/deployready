@@ -1,0 +1,100 @@
+{
+  "lighthouseVersion": "12.2.0",
+  "requestedUrl": "https://demo.invalid:443/account?fixture=synthetic#test",
+  "finalUrl": "https://demo.invalid/home?fixture=synthetic",
+  "fetchTime": "2026-10-19T00:00:00.000Z",
+  "userAgent": "Synthetic DeployReady Lighthouse fixture",
+  "environment": {
+    "networkUserAgent": "Synthetic network user agent",
+    "hostUserAgent": "Synthetic host user agent"
+  },
+  "configSettings": {
+    "formFactor": "desktop",
+    "locale": "en-US",
+    "gatherMode": "navigation"
+  },
+  "runWarnings": ["Synthetic fixture warning: no browser was launched."],
+  "categories": {
+    "performance": {
+      "id": "performance",
+      "title": "Performance",
+      "score": 0.91,
+      "auditRefs": [
+        { "id": "largest-contentful-paint", "weight": 25 },
+        { "id": "unused-javascript", "weight": 0 }
+      ]
+    },
+    "accessibility": {
+      "id": "accessibility",
+      "title": "Accessibility",
+      "score": 0.88,
+      "auditRefs": [{ "id": "button-name", "weight": 1 }]
+    },
+    "best-practices": {
+      "id": "best-practices",
+      "title": "Best Practices",
+      "score": 0.75,
+      "auditRefs": [{ "id": "no-unload-listeners", "weight": 1 }]
+    },
+    "seo": {
+      "id": "seo",
+      "title": "SEO",
+      "score": null,
+      "auditRefs": [
+        { "id": "document-title", "weight": 1 },
+        { "id": "manual-seo-check", "weight": 0 }
+      ]
+    }
+  },
+  "audits": {
+    "largest-contentful-paint": {
+      "id": "largest-contentful-paint",
+      "title": "Largest Contentful Paint",
+      "description": "Synthetic timing for parser coverage.",
+      "score": 0.4,
+      "scoreDisplayMode": "numeric",
+      "numericValue": 2840,
+      "numericUnit": "millisecond",
+      "displayValue": "2.8 s",
+      "details": {
+        "type": "table",
+        "items": [{ "url": "https://user:secret@demo.invalid/app.js?token=do-not-export#fragment", "displayValue": "2.8 s" }]
+      }
+    },
+    "unused-javascript": {
+      "id": "unused-javascript",
+      "title": "Reduce unused JavaScript",
+      "score": 1,
+      "scoreDisplayMode": "binary",
+      "details": { "type": "opportunity", "overallSavingsBytes": 0 }
+    },
+    "button-name": {
+      "id": "button-name",
+      "title": "Buttons have an accessible name",
+      "score": 0,
+      "scoreDisplayMode": "binary",
+      "displayValue": "1 button lacks a name",
+      "details": { "type": "table", "items": [{ "failureSummary": "Fix the button label." }] }
+    },
+    "no-unload-listeners": {
+      "id": "no-unload-listeners",
+      "title": "Does not use deprecated unload listeners",
+      "score": 1,
+      "scoreDisplayMode": "binary"
+    },
+    "document-title": {
+      "id": "document-title",
+      "title": "Document has a title",
+      "score": null,
+      "scoreDisplayMode": "notApplicable"
+    },
+    "manual-seo-check": {
+      "id": "manual-seo-check",
+      "title": "Structured data is valid",
+      "score": null,
+      "scoreDisplayMode": "manual",
+      "description": "Synthetic manual audit.",
+      "details": { "type": "manual", "items": [{ "explanation": "Review with a browser." }] }
+    }
+  }
+}
