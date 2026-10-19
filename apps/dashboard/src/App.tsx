@@ -339,6 +339,7 @@ function LighthousePanel({ report, source, associated, selectedAuditIds, onAssoc
         <span className="icon-badge" aria-hidden="true">◒</span>
       </div>
       <div className="lighthouse-note"><strong>Imported locally, not run here.</strong><span>This view reads a Lighthouse JSON export. It does not launch Chrome, fetch a URL, or create a combined readiness score.</span></div>
+      {(report.runWarnings.length > 0 || report.runtimeError) && <div className="lighthouse-alerts" role="status"><strong>{report.runtimeError ? 'Lighthouse reported a runtime error' : 'Lighthouse run warning'}</strong>{report.runtimeError && <p>{report.runtimeError.message}</p>}{report.runWarnings.map((warning) => <p key={warning}>{warning}</p>)}</div>}
       <div className="lighthouse-categories" aria-label="Lighthouse category scores">
         {report.categories.map((category) => <div className="lighthouse-category" key={category.id}><span>{category.title}</span><strong>{category.scoreDisplay}</strong><small>{category.auditCount} audits referenced</small></div>)}
         {report.categories.length === 0 && <p className="empty-check">No category scores were present in this export.</p>}
@@ -359,7 +360,7 @@ function LighthousePanel({ report, source, associated, selectedAuditIds, onAssoc
         {visibleAudits.length > 0 ? visibleAudits.map((audit) => <LighthouseAuditRow key={audit.id} audit={audit} associated={associated} selected={selectedAuditIds.has(audit.id)} onToggle={onToggleAudit} />) : <div className="no-results lighthouse-empty"><strong>No audits match this view.</strong><button className="text-button" type="button" onClick={() => { setAuditView('all'); setAuditQuery(''); }}>Show all audits</button></div>}
         {report.audits.length === 0 && <p className="empty-check">No audits were available in this export.</p>}
       </div>
-      {(report.runWarnings.length > 0 || report.runtimeError || report.limitations.length > 0) && <div className="lighthouse-limitations"><strong>Import notes</strong>{report.runtimeError && <p>Runtime error: {report.runtimeError.message}</p>}{report.runWarnings.map((warning) => <p key={warning}>Warning: {warning}</p>)}{report.limitations.map((limitation) => <p key={limitation}>Limitation: {limitation}</p>)}</div>}
+      {report.limitations.length > 0 && <div className="lighthouse-limitations"><strong>Import limitations</strong>{report.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}</div>}
     </section>
   );
 }

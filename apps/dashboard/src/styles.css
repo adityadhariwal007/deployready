@@ -436,6 +436,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .lighthouse-panel, .prompt-panel, .comparison-panel { margin-top: 16px; }
 .lighthouse-panel { box-shadow: var(--shadow); }
 .lighthouse-note { border-left-color: #6c94c0; }
+.lighthouse-alerts { display: grid; gap: 3px; margin: 0 21px 15px; padding: 11px 13px; border: 1px solid #e7c6c1; border-left: 3px solid var(--red); border-radius: 8px; color: #704145; background: #fff6f3; font-size: 11px; line-height: 1.45; }
+.lighthouse-alerts strong { color: #853d42; }
+.lighthouse-alerts p { margin: 0; }
 .lighthouse-categories { gap: 7px; margin-left: 21px; margin-right: 21px; }
 .lighthouse-category { border-radius: 9px; background: #fbfcf9; }
 .lighthouse-audits { margin-left: 21px; margin-right: 21px; }
@@ -526,7 +529,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .coverage-explanations, .subtle-details { margin-left: 16px; margin-right: 16px; }
   .limitations-panel ul { padding-left: 16px; padding-right: 16px; }
   .lighthouse-categories { grid-template-columns: repeat(2, 1fr); margin-left: 16px; margin-right: 16px; }
-  .lighthouse-note, .association-box, .lighthouse-audits, .lighthouse-limitations, .prompt-intro, .prompt-actions { margin-left: 16px; margin-right: 16px; }
+  .lighthouse-note, .lighthouse-alerts, .association-box, .lighthouse-audits, .lighthouse-limitations, .prompt-intro, .prompt-actions { margin-left: 16px; margin-right: 16px; }
   .lighthouse-controls { align-items: stretch; flex-direction: column; }
   .segmented-control { width: 100%; }
   .segmented-control button { flex: 1; }
