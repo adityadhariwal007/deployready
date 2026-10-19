@@ -107,6 +107,12 @@ npm run build:dashboard
 
 The static bundle is written to `apps/dashboard/dist/`.
 
+### Local browser verification
+
+The production bundle was also audited locally in Chrome DevTools using Lighthouse `13.5.0` with mobile emulation against `http://127.0.0.1:4173/` on `2026-10-19T18:35:41.744Z` (the report's UTC `fetchTime`). The recorded category scores were Performance `89`, Accessibility `97`, Best Practices `100`, and SEO `100`. This was a real audit of the local production bundle, separate from the clearly labelled synthetic Lighthouse fixture and not a hosted deployment result.
+
+That audit warned that installed Chrome extensions affected load performance. DeployReady therefore does not treat the contaminated JavaScript-size or performance observations as optimization evidence. Its actionable accessibility finding was insufficient contrast on secondary metadata and table/footer text; the affected neutral text token has been darkened while preserving the cream/navy/teal visual system. Re-run Lighthouse in a clean or incognito profile to establish a post-change score. The large raw JSON export remains outside this repository.
+
 ## Scan-to-compare demo
 
 The repository includes small synthetic projects for the demo and test suite:
@@ -174,5 +180,6 @@ DeployReady initially supports root-level Vite/React projects and direct static 
 - Inspect a full monorepo dependency graph.
 - Launch Chrome or run a Lighthouse audit; Lighthouse JSON is imported as local evidence only, and no real Lighthouse audit is bundled with this repository.
 - Verify Docker execution on machines without Docker or Podman; the Docker commands above remain environment-dependent.
+- The current `npm audit` report contains three development-tool findings (one moderate and two critical) in Vitest's transitive test runner dependencies. npm's available remediation is a major Vitest upgrade (`5.0.5`), so it was not applied as an unverified broad upgrade; production dependencies are unaffected by those findings. Reassess the toolchain upgrade separately.
 
 Use the report as a preflight aid, then run the real project build and the deployment platform’s own validation.

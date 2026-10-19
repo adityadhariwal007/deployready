@@ -5,4 +5,5 @@ reports/*.json
 .env
 .env.*
 !.env.example
+!fixtures/projects/corrected-vite-react/.env.template
 .DS_Store
