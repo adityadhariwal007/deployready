@@ -156,6 +156,8 @@ The second command is deliberately network-disabled. It should be run after the 
 - `packages/scanner-core` — Node-only bounded filesystem/Git inspection and six rules.
 - `packages/comparison` — pure, coverage-aware report comparison.
 - `packages/cli` — local scan, validation, and comparison commands.
+- `packages/lighthouse-adapter` — bounded, browser-safe parsing of local Lighthouse JSON exports.
+- `packages/fix-prompt` — deterministic, redacted remediation prompt generation.
 - `apps/dashboard` — static React/Vite report viewer.
 
 The hosted dashboard is a report viewer. Local inspection stays local so a project does not need to upload source code or credentials.
@@ -170,5 +172,7 @@ DeployReady initially supports root-level Vite/React projects and direct static 
 - Resolve dynamic environment access or dynamically assembled URLs completely.
 - Apply automatic source fixes.
 - Inspect a full monorepo dependency graph.
+- Launch Chrome or run a Lighthouse audit; Lighthouse JSON is imported as local evidence only, and no real Lighthouse audit is bundled with this repository.
+- Verify Docker execution on machines without Docker or Podman; the Docker commands above remain environment-dependent.
 
 Use the report as a preflight aid, then run the real project build and the deployment platform’s own validation.
