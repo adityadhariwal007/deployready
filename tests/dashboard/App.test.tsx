@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../apps/dashboard/src/App';
 import { render } from '@testing-library/react';
 
@@ -78,5 +80,38 @@ describe('DeployReady dashboard', () => {
     expect(screen.getByText('No report loaded')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Load synthetic sample' }));
     expect(screen.getByRole('heading', { name: 'Acme storefront · synthetic sample' })).toBeInTheDocument();
+  });
+
+  it('selects a finding into an editable prompt and exposes copy feedback', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(<App />);
+
+    await user.click(screen.getAllByText('No dependency lockfile found')[0]);
+    await user.click(screen.getAllByLabelText('Include in fix prompt')[0]);
+    const preview = screen.getByLabelText('Fix prompt preview') as HTMLTextAreaElement;
+    expect(preview.value).toContain('sample-lockfile');
+    expect(screen.getByText('Selected static findings · 1 issue')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Copy prompt' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(preview.value));
+    expect(screen.getByText('Copied the current prompt text.')).toBeInTheDocument();
+  });
+
+  it('imports the Lighthouse fixture and requires explicit project association', async () => {
+    const user = userEvent.setup();
+    const fixture = readFileSync(resolve(process.cwd(), 'fixtures/lighthouse/synthetic-lighthouse.json'), 'utf8');
+    render(<App />);
+
+    await user.upload(screen.getByLabelText('Import Lighthouse JSON'), new File([fixture], 'synthetic-lighthouse.json', { type: 'application/json' }));
+    expect(await screen.findByRole('heading', { name: 'Lighthouse audit' })).toBeInTheDocument();
+    expect(screen.getByText('Imported locally, not run here.')).toBeInTheDocument();
+    const audit = screen.getByLabelText('Select Lighthouse audit Buttons have an accessible name') as HTMLInputElement;
+    expect(audit).toBeDisabled();
+    await user.click(screen.getByLabelText('Associate this export with the current project'));
+    expect(audit).not.toBeDisabled();
+    await user.click(audit);
+    expect((screen.getByLabelText('Fix prompt preview') as HTMLTextAreaElement).value).toContain('button-name');
   });
 });

@@ -1,10 +1,14 @@
-import { useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import type { CheckResult, CheckStatus, Finding, ScanReport, Severity } from '../../../packages/report-contract/src';
+import { buildFixPrompt } from '../../../packages/fix-prompt/src';
+import type { LighthouseAuditSummary, LighthouseReport } from '../../../packages/lighthouse-adapter/src';
 import { compareReports, type ComparisonResult } from './comparisonBoundary';
+import { readLighthouseFile, type LighthouseInputResult } from './lighthouseBoundary';
 import { parseReportText, readReportFile, type ReportInputResult } from './reportBoundary';
 import { SAMPLE_BASELINE_REPORT, SAMPLE_REPORT } from './sampleReport';
 
 type Notice = Extract<ReportInputResult, { status: 'empty' | 'malformed' | 'unsupported' }> | { status: 'idle' };
+type LighthouseNotice = Extract<LighthouseInputResult, { status: 'empty' | 'malformed' | 'unsupported' }> | { status: 'idle' };
 
 const statusLabels: Record<CheckStatus, string> = {
   passed: 'Passed',
@@ -73,7 +77,22 @@ function NoticeBanner({ notice, noticeId = 'notice-heading' }: { notice: Notice;
   );
 }
 
-function ImportPanel({ onImport, onSample, onClear }: { onImport: () => void; onSample: () => void; onClear: () => void }) {
+function LighthouseNoticeBanner({ notice }: { notice: LighthouseNotice }) {
+  if (notice.status === 'idle') return null;
+  const heading = notice.status === 'empty' ? 'No Lighthouse export loaded' : notice.status === 'malformed' ? 'Could not read Lighthouse export' : 'Unsupported Lighthouse export';
+  return (
+    <section className={`notice-banner notice-${notice.status}`} role="alert" aria-labelledby="lighthouse-notice-heading">
+      <div className="notice-icon" aria-hidden="true">!</div>
+      <div>
+        <h2 id="lighthouse-notice-heading">{heading}</h2>
+        <p>{notice.message}</p>
+        {notice.status === 'unsupported' && notice.errors.length > 0 && <details className="validation-details"><summary>Show validation details</summary><ul>{notice.errors.slice(0, 6).map((error) => <li key={error}>{error}</li>)}</ul></details>}
+      </div>
+    </section>
+  );
+}
+
+function ImportPanel({ onImport, onLighthouseImport, onSample, onClear }: { onImport: () => void; onLighthouseImport: () => void; onSample: () => void; onClear: () => void }) {
   return (
     <section className="import-panel" aria-labelledby="import-heading">
       <div>
@@ -83,6 +102,7 @@ function ImportPanel({ onImport, onSample, onClear }: { onImport: () => void; on
       </div>
       <div className="import-actions">
         <ImportButton onClick={onImport} />
+        <button className="button button-secondary" type="button" onClick={onLighthouseImport}><span aria-hidden="true">◒</span> Import Lighthouse JSON</button>
         <button className="button button-secondary" type="button" onClick={onSample}>Load synthetic sample</button>
         <button className="text-button" type="button" onClick={onClear}>Clear report</button>
       </div>
@@ -106,6 +126,8 @@ function CoverageCard({ report }: { report: ScanReport }) {
   const evaluated = report.checks.filter((check) => check.status !== 'not_checked').length;
   const notChecked = report.checks.filter((check) => check.status === 'not_checked').length;
   const notApplicable = report.checks.filter((check) => check.status === 'not_applicable').length;
+  const deliberatelyExcluded = coverage.skippedFiles.filter((file) => file.reason === 'environment-file-content-not-read');
+  const boundedSkips = coverage.skippedFiles.filter((file) => file.reason !== 'environment-file-content-not-read');
   return (
     <article className="panel coverage-card" aria-labelledby="coverage-heading">
       <div className="panel-heading">
@@ -124,6 +146,11 @@ function CoverageCard({ report }: { report: ScanReport }) {
         <div><dt>Per-file limit</dt><dd>{formatBytes(coverage.limits.maxFileBytes)}</dd></div>
         <div><dt>Total byte limit</dt><dd>{formatBytes(coverage.limits.maxTotalBytes)}</dd></div>
       </dl>
+      <div className="coverage-explanations">
+        <div><strong>Skipped files</strong><span>{boundedSkips.length > 0 ? `${boundedSkips.length} file${boundedSkips.length === 1 ? '' : 's'} skipped by a safety or coverage limit.` : 'None recorded.'}</span></div>
+        <div><strong>Secret-file content</strong><span>{deliberatelyExcluded.length > 0 ? `${deliberatelyExcluded.length} environment file${deliberatelyExcluded.length === 1 ? '' : 's'} excluded deliberately; filenames only are retained.` : 'No sensitive environment file content was read.'}</span></div>
+        <div><strong>Unavailable checks</strong><span>{notChecked > 0 ? `${notChecked} check${notChecked === 1 ? '' : 's'} could not be evaluated.` : 'None.'}</span></div>
+      </div>
       {coverage.skippedFiles.length > 0 && (
         <details className="subtle-details">
           <summary>{coverage.skippedFiles.length} skipped files</summary>
@@ -143,7 +170,7 @@ function Evidence({ evidence }: { evidence: Record<string, unknown> }) {
   );
 }
 
-function FindingDetails({ finding }: { finding: Finding }) {
+function FindingDetails({ finding, selected, onToggle, onCreatePrompt }: { finding: Finding; selected: boolean; onToggle: (fingerprint: string) => void; onCreatePrompt: (fingerprint: string) => void }) {
   return (
     <details className="finding-details">
       <summary>
@@ -155,14 +182,18 @@ function FindingDetails({ finding }: { finding: Finding }) {
           <p className="location"><span aria-hidden="true">⌖</span> <code>{finding.location.path}</code>{finding.location.line ? `:${finding.location.line}` : ''}{finding.location.jsonPointer ? ` · ${finding.location.jsonPointer}` : ''}</p>
         )}
         <div className="explanation-block"><p className="detail-label">Why it matters</p><p>{finding.explanation}</p></div>
-        <div className="next-steps"><p className="detail-label">Next steps</p><ol>{finding.nextSteps.map((step) => <li key={step}>{step}</li>)}</ol></div>
-        <Evidence evidence={finding.evidence} />
-      </div>
+         <div className="next-steps"><p className="detail-label">Next steps</p><ol>{finding.nextSteps.map((step) => <li key={step}>{step}</li>)}</ol></div>
+         <Evidence evidence={finding.evidence} />
+         <div className="issue-actions">
+           <label className="issue-select"><input type="checkbox" checked={selected} onChange={() => onToggle(finding.fingerprint)} /> <span>Include in fix prompt</span></label>
+           <button className="text-button" type="button" onClick={() => onCreatePrompt(finding.fingerprint)}>Create fix prompt</button>
+         </div>
+       </div>
     </details>
   );
 }
 
-function CheckCard({ check }: { check: CheckResult }) {
+function CheckCard({ check, selectedFindingFingerprints, onToggleFinding, onCreatePrompt }: { check: CheckResult; selectedFindingFingerprints: Set<string>; onToggleFinding: (fingerprint: string) => void; onCreatePrompt: (fingerprint: string) => void }) {
   return (
     <details className="check-card">
       <summary>
@@ -174,7 +205,7 @@ function CheckCard({ check }: { check: CheckResult }) {
           <span><span className="detail-label inline-label">Severity</span> <SeverityPill severity={check.severity} /></span>
           {check.evaluatedInputs && <span><span className="detail-label inline-label">Inputs</span> {check.evaluatedInputs.length > 0 ? check.evaluatedInputs.join(', ') : 'None recorded'}</span>}
         </div>
-        {check.findings.length > 0 ? <div className="finding-stack">{check.findings.map((finding) => <FindingDetails key={finding.fingerprint} finding={finding} />)}</div> : <p className="empty-check">No findings recorded for this check.</p>}
+         {check.findings.length > 0 ? <div className="finding-stack">{check.findings.map((finding) => <FindingDetails key={finding.fingerprint} finding={finding} selected={selectedFindingFingerprints.has(finding.fingerprint)} onToggle={onToggleFinding} onCreatePrompt={onCreatePrompt} />)}</div> : <p className="empty-check">No findings recorded for this check.</p>}
         {check.evidence && <Evidence evidence={check.evidence} />}
         {check.limitations && check.limitations.length > 0 && (
           <div className="limitation-note"><strong>Limitations</strong>{check.limitations.map((limitation) => <p key={`${limitation.reason}-${limitation.path}`}>{limitation.reason}{limitation.path ? ` (${limitation.path})` : ''}</p>)}</div>
@@ -184,7 +215,7 @@ function CheckCard({ check }: { check: CheckResult }) {
   );
 }
 
-function ChecksPanel({ report }: { report: ScanReport }) {
+function ChecksPanel({ report, selectedFindingFingerprints, onToggleFinding, onCreatePrompt }: { report: ScanReport; selectedFindingFingerprints: Set<string>; onToggleFinding: (fingerprint: string) => void; onCreatePrompt: (fingerprint: string) => void }) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | CheckStatus>('all');
   const [severityFilter, setSeverityFilter] = useState<'all' | Severity>('all');
@@ -209,7 +240,7 @@ function ChecksPanel({ report }: { report: ScanReport }) {
         <label><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | CheckStatus)}><option value="all">All statuses</option><option value="passed">Passed</option><option value="finding">Findings</option><option value="not_checked">Not checked</option><option value="not_applicable">Not applicable</option></select></label>
         <label><span className="sr-only">Filter by severity</span><select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as 'all' | Severity)}><option value="all">All severities</option><option value="error">Error</option><option value="warning">Warning</option><option value="info">Info</option></select></label>
       </div>
-      {visibleChecks.length > 0 ? <div className="check-stack">{visibleChecks.map((check) => <CheckCard key={check.ruleId} check={check} />)}</div> : <div className="no-results"><strong>No checks match those filters.</strong><button className="text-button" type="button" onClick={() => { setQuery(''); setStatusFilter('all'); setSeverityFilter('all'); }}>Clear filters</button></div>}
+       {visibleChecks.length > 0 ? <div className="check-stack">{visibleChecks.map((check) => <CheckCard key={check.ruleId} check={check} selectedFindingFingerprints={selectedFindingFingerprints} onToggleFinding={onToggleFinding} onCreatePrompt={onCreatePrompt} />)}</div> : <div className="no-results"><strong>No checks match those filters.</strong><button className="text-button" type="button" onClick={() => { setQuery(''); setStatusFilter('all'); setSeverityFilter('all'); }}>Clear filters</button></div>}
     </section>
   );
 }
@@ -245,9 +276,109 @@ function ComparisonPanel({ before, after, onImportBefore, onUseBaseline, beforeS
   );
 }
 
+function LighthousePanel({ report, source, associated, selectedAuditIds, onAssociationChange, onToggleAudit }: { report: LighthouseReport; source: string; associated: boolean; selectedAuditIds: Set<string>; onAssociationChange: (value: boolean) => void; onToggleAudit: (id: string) => void }) {
+  const actionableCount = report.audits.filter((audit) => audit.actionable).length;
+  return (
+    <section className="panel lighthouse-panel" aria-labelledby="lighthouse-heading">
+      <div className="panel-heading">
+        <div><p className="eyebrow">Local browser evidence</p><h2 id="lighthouse-heading">Lighthouse audit</h2><p className="muted lighthouse-source">{source} · Lighthouse {report.lighthouseVersion}{report.finalUrl ? ` · ${report.finalUrl}` : ''}</p></div>
+        <span className="icon-badge" aria-hidden="true">◒</span>
+      </div>
+      <div className="lighthouse-note"><strong>Imported locally, not run here.</strong><span>This view reads a Lighthouse JSON export. It does not launch Chrome, fetch a URL, or create a combined readiness score.</span></div>
+      <div className="lighthouse-categories" aria-label="Lighthouse category scores">
+        {report.categories.map((category) => <div className="lighthouse-category" key={category.id}><span>{category.title}</span><strong>{category.scoreDisplay}</strong><small>{category.auditCount} audits referenced</small></div>)}
+        {report.categories.length === 0 && <p className="empty-check">No category scores were present in this export.</p>}
+      </div>
+      <div className="association-box">
+        <label><input type="checkbox" checked={associated} onChange={(event) => onAssociationChange(event.target.checked)} /> <strong>Associate this export with the current project</strong></label>
+        <span>Only check this when you know the export belongs to the report above. This explicit choice is required before Lighthouse audits can enter a fix prompt.</span>
+      </div>
+      <div className="lighthouse-audits">
+        <div className="subheading-row"><div><p className="detail-label">Audit details</p><strong>{selectedAuditIds.size} selected · {actionableCount} actionable failed audits</strong></div><span className="muted">Select failed audits for targeted remediation.</span></div>
+        {report.audits.map((audit) => <LighthouseAuditRow key={audit.id} audit={audit} associated={associated} selected={selectedAuditIds.has(audit.id)} onToggle={onToggleAudit} />)}
+        {report.audits.length === 0 && <p className="empty-check">No audits were available in this export.</p>}
+      </div>
+      {(report.runWarnings.length > 0 || report.runtimeError || report.limitations.length > 0) && <div className="lighthouse-limitations"><strong>Import notes</strong>{report.runtimeError && <p>Runtime error: {report.runtimeError.message}</p>}{report.runWarnings.map((warning) => <p key={warning}>Warning: {warning}</p>)}{report.limitations.map((limitation) => <p key={limitation}>Limitation: {limitation}</p>)}</div>}
+    </section>
+  );
+}
+
+function LighthouseAuditRow({ audit, associated, selected, onToggle }: { audit: LighthouseAuditSummary; associated: boolean; selected: boolean; onToggle: (id: string) => void }) {
+  const canSelect = associated && audit.actionable;
+  return (
+    <article className={`lighthouse-audit audit-${audit.state}`}>
+      <div className="lighthouse-audit-select"><input type="checkbox" aria-label={`Select Lighthouse audit ${audit.title}`} checked={selected} disabled={!canSelect} onChange={() => onToggle(audit.id)} /></div>
+      <div className="lighthouse-audit-main"><div className="lighthouse-audit-title"><strong>{audit.title}</strong><code>{audit.id}</code></div><p>{audit.displayValue ?? audit.suggestedInvestigation}</p>{audit.evidence.length > 0 && <details className="evidence-details"><summary>View audit evidence</summary><ul>{audit.evidence.map((item) => <li key={item}>{item}</li>)}</ul></details>}</div>
+      <div className="lighthouse-audit-meta"><span className={`status-pill audit-state-${audit.state.replace('_', '-')}`}>{audit.state.replace('_', ' ')}</span>{audit.metric && <small>{audit.metric.displayValue ?? `${audit.metric.value} ${audit.metric.unit ?? ''}`}</small>}</div>
+    </article>
+  );
+}
+
+function FixPromptPanel({ report, lighthouse, selectedFindingFingerprints, selectedAuditIds, lighthouseAssociated }: { report: ScanReport; lighthouse: LighthouseReport | null; selectedFindingFingerprints: Set<string>; selectedAuditIds: Set<string>; lighthouseAssociated: boolean }) {
+  const document = useMemo(() => buildFixPrompt({
+    report,
+    selectedFindingFingerprints: [...selectedFindingFingerprints],
+    ...(lighthouse ? { lighthouse, selectedLighthouseAuditIds: [...selectedAuditIds], lighthouseAssociated } : {}),
+  }), [lighthouse, lighthouseAssociated, report, selectedAuditIds, selectedFindingFingerprints]);
+  const [draft, setDraft] = useState(document.content);
+  const [actionStatus, setActionStatus] = useState('');
+
+  useEffect(() => {
+    setDraft(document.content);
+    setActionStatus('');
+  }, [document.content]);
+
+  async function copyPrompt() {
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(draft);
+      else {
+        const textarea = window.document.createElement('textarea');
+        textarea.value = draft;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        window.document.body.appendChild(textarea);
+        textarea.select();
+        window.document.execCommand('copy');
+        textarea.remove();
+      }
+      setActionStatus('Copied the current prompt text.');
+    } catch {
+      setActionStatus('Copy was unavailable. Select the preview text and copy it manually.');
+    }
+  }
+
+  function downloadPrompt() {
+    try {
+      const blob = new Blob([draft], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = 'deployready-fix-prompt.md';
+      link.click();
+      URL.revokeObjectURL(url);
+      setActionStatus('Downloaded deployready-fix-prompt.md.');
+    } catch {
+      setActionStatus('Download was unavailable. Use the editable preview as a Markdown document.');
+    }
+  }
+
+  const scopeLabel = document.scope === 'no-remediation' ? 'No issue selected' : document.scope === 'selected-static-and-lighthouse-audits' ? 'Static + associated Lighthouse issues' : 'Selected static findings';
+  return (
+    <section className="panel prompt-panel" id="fix-prompt" aria-labelledby="fix-prompt-heading">
+      <div className="panel-heading"><div><p className="eyebrow">Deterministic handoff</p><h2 id="fix-prompt-heading">Fix prompt</h2><p className="muted">{scopeLabel} · {document.issues.length} issue{document.issues.length === 1 ? '' : 's'}</p></div><span className="icon-badge" aria-hidden="true">✦</span></div>
+      <p className="prompt-intro">Review and edit this Markdown before giving it to a coding assistant. It contains quoted evidence and verification instructions, never automatic fixes or credentials.</p>
+      <textarea aria-label="Fix prompt preview" className="prompt-preview" value={draft} onChange={(event) => setDraft(event.target.value)} spellCheck={false} />
+      <div className="prompt-actions"><button className="button button-primary" type="button" onClick={() => void copyPrompt()}>Copy prompt</button><button className="button button-secondary" type="button" onClick={downloadPrompt}>Download Markdown</button><span className="prompt-status" role="status" aria-live="polite">{actionStatus}</span></div>
+    </section>
+  );
+}
+
 function PartialBanner({ report }: { report: ScanReport }) {
   if (!report.summary.partial && report.coverage.checksNotChecked === 0 && report.limitations.length === 0) return null;
-  return <div className="partial-banner" role="status"><span className="partial-icon" aria-hidden="true">◐</span><div><strong>Partial scan</strong><span>{report.coverage.checksNotChecked} check{report.coverage.checksNotChecked === 1 ? '' : 's'} not checked. Read the limitations before acting on this report.</span></div></div>;
+  const excluded = report.coverage.skippedFiles.filter((file) => file.reason === 'environment-file-content-not-read').length;
+  const skipped = report.coverage.skippedFiles.length - excluded;
+  return <div className="partial-banner" role="status"><span className="partial-icon" aria-hidden="true">◐</span><div><strong>Partial scan</strong><span>{report.coverage.checksNotChecked} unavailable check{report.coverage.checksNotChecked === 1 ? '' : 's'} · {skipped} skipped file{skipped === 1 ? '' : 's'} · {excluded} sensitive environment file{excluded === 1 ? '' : 's'} deliberately excluded from content reads.</span></div></div>;
 }
 
 function ReportHeader({ report, source }: { report: ScanReport; source: string }) {
@@ -267,10 +398,19 @@ export function App() {
   const [report, setReport] = useState<ScanReport | null>(SAMPLE_REPORT);
   const [reportSource, setReportSource] = useState('Bundled synthetic sample');
   const [notice, setNotice] = useState<Notice>({ status: 'idle' });
+  const [lighthouse, setLighthouse] = useState<LighthouseReport | null>(null);
+  const [lighthouseSource, setLighthouseSource] = useState('');
+  const [lighthouseNotice, setLighthouseNotice] = useState<LighthouseNotice>({ status: 'idle' });
+  const [lighthouseAssociated, setLighthouseAssociated] = useState(false);
+  const [selectedAuditIds, setSelectedAuditIds] = useState<Set<string>>(new Set());
+  // Keep the workbench explicit: findings are selected for remediation only after
+  // the reviewer checks them or uses the nearby "Create fix prompt" action.
+  const [selectedFindingFingerprints, setSelectedFindingFingerprints] = useState<Set<string>>(() => new Set());
   const [beforeReport, setBeforeReport] = useState<ScanReport>(SAMPLE_BASELINE_REPORT);
   const [beforeSource, setBeforeSource] = useState('Bundled synthetic baseline');
   const [beforeNotice, setBeforeNotice] = useState<Notice>({ status: 'idle' });
   const inputRef = useRef<HTMLInputElement>(null);
+  const lighthouseInputRef = useRef<HTMLInputElement>(null);
   const beforeInputRef = useRef<HTMLInputElement>(null);
 
   async function handleImport(event: ChangeEvent<HTMLInputElement>, target: 'after' | 'before') {
@@ -279,19 +419,54 @@ export function App() {
     if (!file) return;
     const result = await readReportFile(file);
     if (target === 'after') {
-      if (result.status === 'loaded') { setReport(result.report); setReportSource(file.name); setNotice({ status: 'idle' }); }
+      if (result.status === 'loaded') { setReport(result.report); setReportSource(file.name); setSelectedFindingFingerprints(new Set()); setLighthouseAssociated(false); setSelectedAuditIds(new Set()); setNotice({ status: 'idle' }); }
       else setNotice(result);
     } else if (result.status === 'loaded') {
       setBeforeReport(result.report); setBeforeSource(file.name); setBeforeNotice({ status: 'idle' });
     } else setBeforeNotice(result);
   }
 
+  async function handleLighthouseImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const result = await readLighthouseFile(file);
+    if (result.status === 'loaded') {
+      setLighthouse(result.report);
+      setLighthouseSource(file.name);
+      setSelectedAuditIds(new Set());
+      setLighthouseAssociated(false);
+      setLighthouseNotice({ status: 'idle' });
+    } else setLighthouseNotice(result);
+  }
+
   function loadSample() {
-    setReport(SAMPLE_REPORT); setReportSource('Bundled synthetic sample'); setNotice({ status: 'idle' });
+    setReport(SAMPLE_REPORT); setReportSource('Bundled synthetic sample'); setSelectedFindingFingerprints(new Set()); setLighthouseAssociated(false); setSelectedAuditIds(new Set()); setNotice({ status: 'idle' });
   }
 
   function clearReport() {
-    setReport(null); setReportSource(''); setNotice({ status: 'empty', message: 'Choose a JSON report or load the synthetic sample to begin.' });
+    setReport(null); setReportSource(''); setSelectedFindingFingerprints(new Set()); setLighthouseAssociated(false); setSelectedAuditIds(new Set()); setNotice({ status: 'empty', message: 'Choose a JSON report or load the synthetic sample to begin.' });
+  }
+
+  function toggleFinding(fingerprint: string) {
+    setSelectedFindingFingerprints((current) => {
+      const next = new Set(current);
+      if (next.has(fingerprint)) next.delete(fingerprint); else next.add(fingerprint);
+      return next;
+    });
+  }
+
+  function createPromptFor(fingerprint: string) {
+    setSelectedFindingFingerprints((current) => new Set(current).add(fingerprint));
+    window.requestAnimationFrame(() => document.getElementById('fix-prompt')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  function toggleAudit(id: string) {
+    setSelectedAuditIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   const afterReport = report;
@@ -299,10 +474,12 @@ export function App() {
     <div className="app-shell">
       <header className="topbar"><a className="brand" href="#top" aria-label="DeployReady home"><span className="brand-mark" aria-hidden="true">D</span><span>Deploy<span>Ready</span></span></a><div className="topbar-actions"><span className="offline-label"><span className="offline-dot" aria-hidden="true" /> Local review</span><ImportButton compact onClick={() => inputRef.current?.click()} /></div></header>
       <input ref={inputRef} className="sr-only" type="file" accept="application/json,.json" aria-label="Import after JSON report" onChange={(event) => void handleImport(event, 'after')} />
+      <input ref={lighthouseInputRef} className="sr-only" type="file" accept="application/json,.json" aria-label="Import Lighthouse JSON" onChange={(event) => void handleLighthouseImport(event)} />
       <input ref={beforeInputRef} className="sr-only" type="file" accept="application/json,.json" aria-label="Import before JSON report" onChange={(event) => void handleImport(event, 'before')} />
       <main id="top" className="page-content">
         <NoticeBanner notice={notice} />
-        <ImportPanel onImport={() => inputRef.current?.click()} onSample={loadSample} onClear={clearReport} />
+        <LighthouseNoticeBanner notice={lighthouseNotice} />
+        <ImportPanel onImport={() => inputRef.current?.click()} onLighthouseImport={() => lighthouseInputRef.current?.click()} onSample={loadSample} onClear={clearReport} />
         {beforeNotice.status !== 'idle' && <NoticeBanner notice={beforeNotice} noticeId="before-notice-heading" />}
         {afterReport ? <>
           <ReportHeader report={afterReport} source={reportSource} />
@@ -315,9 +492,11 @@ export function App() {
             <SummaryCard label="Warnings" value={afterReport.summary.bySeverity.warning} detail="Review before handoff" tone="caution" />
             <SummaryCard label="Checks" value={afterReport.checks.length} detail={`${afterReport.checks.filter((check) => check.status !== 'not_checked').length} evaluated · ${afterReport.checks.filter((check) => check.status === 'not_checked').length} not checked`} />
           </section>
-          <div className="dashboard-grid"><ChecksPanel report={afterReport} /><CoverageCard report={afterReport} /></div>
-          {afterReport.limitations.length > 0 && <section className="limitations-panel panel" aria-labelledby="limitations-heading"><div className="panel-heading"><div><p className="eyebrow">Read the edges</p><h2 id="limitations-heading">Scan limitations</h2></div></div><ul>{afterReport.limitations.map((limitation) => <li key={`${limitation.reason}-${limitation.path}`}><strong>{limitation.reason}</strong>{limitation.path && <code>{limitation.path}</code>}{limitation.detail && <span>{limitation.detail}</span>}</li>)}</ul></section>}
-          <ComparisonPanel before={beforeReport} after={afterReport} beforeSource={beforeSource} afterSource={reportSource} onImportBefore={() => beforeInputRef.current?.click()} onUseBaseline={() => { setBeforeReport(SAMPLE_BASELINE_REPORT); setBeforeSource('Bundled synthetic baseline'); setBeforeNotice({ status: 'idle' }); }} />
+           <div className="dashboard-grid"><ChecksPanel report={afterReport} selectedFindingFingerprints={selectedFindingFingerprints} onToggleFinding={toggleFinding} onCreatePrompt={createPromptFor} /><CoverageCard report={afterReport} /></div>
+           {afterReport.limitations.length > 0 && <section className="limitations-panel panel" aria-labelledby="limitations-heading"><div className="panel-heading"><div><p className="eyebrow">Read the edges</p><h2 id="limitations-heading">Scan limitations</h2></div></div><ul>{afterReport.limitations.map((limitation) => <li key={`${limitation.reason}-${limitation.path}`}><strong>{limitation.reason}</strong>{limitation.path && <code>{limitation.path}</code>}{limitation.detail && <span>{limitation.detail}</span>}</li>)}</ul></section>}
+           {lighthouse && <LighthousePanel report={lighthouse} source={lighthouseSource} associated={lighthouseAssociated} selectedAuditIds={selectedAuditIds} onAssociationChange={(value) => { setLighthouseAssociated(value); if (!value) setSelectedAuditIds(new Set()); }} onToggleAudit={toggleAudit} />}
+           <FixPromptPanel report={afterReport} lighthouse={lighthouse} selectedFindingFingerprints={selectedFindingFingerprints} selectedAuditIds={selectedAuditIds} lighthouseAssociated={lighthouseAssociated} />
+           <ComparisonPanel before={beforeReport} after={afterReport} beforeSource={beforeSource} afterSource={reportSource} onImportBefore={() => beforeInputRef.current?.click()} onUseBaseline={() => { setBeforeReport(SAMPLE_BASELINE_REPORT); setBeforeSource('Bundled synthetic baseline'); setBeforeNotice({ status: 'idle' }); }} />
         </> : <div className="empty-dashboard"><div className="empty-orbit" aria-hidden="true">◌</div><h1>Bring a report into focus</h1><p>DeployReady needs a validated JSON scan report to show checks, evidence, and coverage.</p><ImportButton onClick={() => inputRef.current?.click()} /></div>}
       </main>
       <AppFooter />

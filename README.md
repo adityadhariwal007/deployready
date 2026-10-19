@@ -91,6 +91,14 @@ Open the local Vite URL shown in the terminal. The dashboard starts with a clear
 
 The dashboard validates reports locally before rendering them. It has no authentication, database, repository connection, runtime AI, or server-side scanner.
 
+### Review and remediation workflow
+
+- Expand a finding and choose **Include in fix prompt**, or use **Create fix prompt** beside it.
+- Review the deterministic, editable Markdown preview. **Copy prompt** uses the Clipboard API when available and a selectable fallback otherwise; **Download Markdown** saves the same current preview text.
+- Use **Import Lighthouse JSON** for a local Lighthouse export. The browser adapter preserves category scores, audit states, evidence bounds, warnings, and limitations without launching Chrome or contacting the URL.
+- Lighthouse audits stay separate from the DeployReady scan until you explicitly confirm that the export belongs to the current project. Only selected failed, actionable audits can then enter the prompt; no combined readiness score is calculated.
+- Coverage distinguishes files skipped by bounds or safety limits, deliberate environment-file content exclusion, and checks that were unavailable. None of those states is treated as a pass.
+
 For a production bundle:
 
 ```bash
