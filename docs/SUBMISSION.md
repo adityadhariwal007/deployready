@@ -4,9 +4,11 @@
 
 DeployReady is an offline, evidence-backed deployment preflight workbench for beginners building Vite/React projects. It scans a target project without executing its scripts, exports a versioned JSON report, and presents findings, coverage limitations, local Lighthouse evidence, and before/after comparison in a static React dashboard.
 
-The initial profile checks six high-signal failure modes: missing build scripts, missing/conflicting/mismatched dependency lockfiles, missing/invalid/incompatible Node declarations, Vite environment names missing from committed templates, literal loopback URLs in source, and Git-tracked non-template environment files. Findings include severity, safe evidence, locations, explanations, and deterministic next steps. Reports use schema `1.0`, relative paths, bounded inputs, explicit `not_checked`/`not_applicable` states, and coverage metadata so incomplete inspection is not presented as success.
+The initial profile checks six high-signal failure modes: missing build scripts, missing/conflicting/mismatched dependency lockfiles, missing/invalid/incompatible Node declarations, Vite environment names missing from recognized environment templates, literal loopback URLs in source, and Git-tracked non-template environment files. Findings include severity, safe evidence, locations, explanations, and deterministic next steps. Reports use schema `1.0`, relative paths, bounded inputs, explicit `not_checked`/`not_applicable` states, and coverage metadata so incomplete inspection is not presented as success.
 
 The CLI supports `scan`, `validate-report`, and coverage-aware `compare` commands. The browser dashboard imports validated local reports, keeps Lighthouse evidence separate until the user confirms same-project association, and generates editable deterministic Markdown remediation prompts without applying changes or sending source, credentials, or reports to a server. The repository includes clean, broken, and corrected fixtures for a repeatable scan-to-compare demo.
+
+OmniRush.ai was used as the implementation workspace and process partner: it helped inspect the existing repository, preserve the established stack, implement and review the scanner/dashboard workflow, run the reproducibility checks, and prepare this factual submission without fabricating deployment or benchmark claims. The implementation history is preserved in sessions `ses_eab065488ffe3hNS0Y6u4x5QIW` and `ses_eaaa9cb6bffe2F7b7wBU8HCJMd`.
 
 ## Repository
 
