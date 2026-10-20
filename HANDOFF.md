@@ -1,8 +1,12 @@
-# DeployReady handoff
+# DeployReady handoff (archived)
 
-**Handoff state:** safe to resume in `/Users/adityadhariwal/Documents/DeployReady`.
+**Handoff state:** archived historical context. Use `README.md`, `docs/SUBMISSION.md`,
+the current Git history, and CI for the current release state.
 
-This handoff was prepared in the existing DeployReady conversation. No files were reset, deleted, published, pushed, or submitted. The latest implementation writers have completed and were archived through the supported session control; no OmniRush command was busy at handoff time.
+This handoff was prepared during the implementation conversation. It records an
+earlier continuation point and is not an instruction to restore its old working
+tree, commit list, verification counts, or pending-work notes. No contest
+submission or legal declaration is authorized by this file.
 
 ## Product and architecture
 

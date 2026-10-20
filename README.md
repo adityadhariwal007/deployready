@@ -34,6 +34,28 @@ Skipped checks are never treated as passed, and a skipped current check cannot m
 
 The scanner does not need network access after dependencies are installed.
 
+### Supported project and declaration semantics
+
+The initial profile is for a project with a root `package.json` that looks like
+Vite/React: Vite plus React dependencies, a Vite config, or a Vite build
+script, with either React dependencies or recognizable React source imports.
+Projects that do not match that profile are reported as `unsupported`; all six
+checks are `not_applicable` rather than being presented as passes.
+
+The Node-version check accepts declarations from:
+
+- `package.json` `engines.node` and `volta.node`;
+- the first non-comment line of `.nvmrc` or `.node-version`;
+- the `node` or `nodejs` entry in `.tool-versions`; and
+- numeric `FROM node:<tag>` declarations in `Dockerfile` (for example,
+  `22-slim` is treated as the `22.x` line).
+
+Each declaration is normalized as a semver range. A leading `v` is removed;
+invalid ranges produce a finding, and every valid declaration must intersect
+every other valid declaration. A non-overlapping pair produces an incompatible
+ranges finding. If no supported declaration is present, the check reports a
+missing-declaration finding.
+
 ## Install and verify
 
 ```bash
@@ -70,6 +92,16 @@ Useful options:
 - `--strict-coverage` — return the partial-coverage exit code when any required check is skipped.
 - `--max-file-bytes`, `--max-files`, `--max-total-bytes` — bounded scan limits.
 - `--format pretty|json` and `--output <path>` — terminal or machine-readable output.
+
+The default bounded walk reads at most 1,000 files, 256 KiB per file, and 5 MiB
+in total. These values can be changed with the three `--max-*` options. It
+skips `.git`, `node_modules`, `dist`, `build`, `coverage`, `.next`, `.cache`,
+`.vite`, `fixtures`, `tests`, `__tests__`, and `e2e`. Symlinks, binary files,
+unreadable files, and files beyond a limit are recorded as coverage decisions.
+The contents of `.env` and non-template `.env.*` files are never read. Committed
+templates are filename patterns ending in `.env.example`, `.env.sample`, or
+`.env.template`, with optional dot-separated prefixes such as
+`.env.production.example`.
 
 Exit codes:
 
@@ -109,9 +141,15 @@ The static bundle is written to `apps/dashboard/dist/`.
 
 ### Local browser verification
 
-The production bundle was also audited locally in Chrome DevTools using Lighthouse `13.5.0` with mobile emulation against `http://127.0.0.1:4173/` on `2026-10-19T18:35:41.744Z` (the report's UTC `fetchTime`). The initial recorded category scores were Performance `89`, Accessibility `97`, Best Practices `100`, and SEO `100`. After the contrast fix, a second real mobile audit recorded Performance `88`, Accessibility `100`, Best Practices `100`, and SEO `100`. These were real audits of the local production bundle, separate from the clearly labelled synthetic Lighthouse fixture and not hosted deployment results.
-
-Both audits warned that installed Chrome extensions affected load performance. DeployReady therefore does not treat the contaminated JavaScript-size or performance observations as optimization evidence or claim a clean benchmark. The actionable accessibility finding was insufficient contrast on secondary metadata and table/footer text; the affected neutral text token was darkened while preserving the cream/navy/teal visual system. The real Lighthouse export was imported and rendered in the dashboard; its Lighthouse evidence remained excluded from remediation until the explicit same-project association gate was confirmed. The large raw JSON export remains outside this repository.
+Historical local Chrome DevTools Lighthouse runs were performed against the
+local production bundle, not a hosted deployment. They recorded Performance
+`88`, Accessibility `100`, Best Practices `100`, and SEO `100` after a contrast
+fix. Both runs warned that installed Chrome extensions affected load
+performance, so these numbers are not a clean benchmark and are not used as
+optimization evidence. The real JSON export was imported and rendered, but it
+was not associated with the synthetic sample project; the association gate and
+the rule that keeps unassociated Lighthouse evidence out of remediation were
+verified instead. The raw export is intentionally not committed.
 
 ## Scan-to-compare demo
 
@@ -154,7 +192,12 @@ docker build -t deployready .
 docker run --rm --network none deployready npm test
 ```
 
-The second command is deliberately network-disabled. GitHub Actions run `39304457396` (commit `816e37c`) completed clean `npm ci`, all 42 tests, typecheck, production build, Docker image build, and Docker tests with `--network none`. Docker is therefore verified in CI; local Docker availability is not required to use the scanner or dashboard.
+The second command is deliberately network-disabled. GitHub Actions run
+`39320103588` for `da130a6` completed clean `npm ci`, all 42 tests, typecheck,
+production build, Docker image build, and Docker tests with `--network none`.
+The preceding redesign verification run `39319366051` for `d73552f` also
+succeeded. Docker is therefore verified in CI; local Docker availability is
+not required to use the scanner or dashboard.
 
 ## Release verification and demo path
 
@@ -183,7 +226,7 @@ The hosted dashboard is a report viewer. Local inspection stays local so a proje
 
 ## Limitations
 
-DeployReady initially supports root-level Vite/React projects and direct static source patterns. It does not:
+DeployReady initially supports root-level Vite/React projects and direct static source patterns. Unsupported project shapes receive six `not_applicable` checks rather than a false pass. It does not:
 
 - Execute a project build.
 - Contact a deployment provider.
